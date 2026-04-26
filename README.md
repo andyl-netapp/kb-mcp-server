@@ -70,10 +70,22 @@ Once set up, you can ask Copilot CLI questions like:
 - *"Look up articles mentioning WAFL_CP_LIMIT"*
 - *"What does KB article https://kb.netapp.com/... say about this error?"*
 
-Two complementary search modes:
+Two complementary search tools:
 
-- **`kb_semantic_search`** — best for conceptual questions and natural-language troubleshooting descriptions. Uses BM25 + sentence-transformer cosine similarity, followed by cross-encoder reranking.
+- **`kb_semantic_search`** — best for conceptual questions and natural-language troubleshooting descriptions.
 - **`kb_keyword_lookup`** — best for exact technical terms: error codes, EMS event names, ONTAP command names, log fragments (e.g. `ENOSPC`, `wafliron`, `snapmirror break`).
+
+### How `kb_semantic_search` works — three-stage pipeline
+
+| Stage | Method | What it does |
+|-------|--------|-------------|
+| 1 | **BM25** | Fast sparse keyword retrieval — scores chunks by term frequency. Good at catching exact technical words even when semantic meaning is ambiguous. |
+| 2 | **Semantic similarity** | Encodes your query and each candidate chunk into 384-dimensional vectors using `all-MiniLM-L6-v2`, then scores by cosine similarity. Catches meaning even when the exact words differ. |
+| 3 | **Cross-encoder reranking** | Takes the top candidates from stages 1+2 and re-scores them by running the query and chunk *together* through `ms-marco-MiniLM-L-6-v2`. More accurate than vector similarity alone because it considers full query–chunk interaction. |
+
+Stages 1+2 run in parallel over the full index (fast). Stage 3 only runs on the top ~50 candidates (slower but more precise). Final results are ordered by rerank score.
+
+`kb_keyword_lookup` skips stages 2 and 3 — it does BM25 + exact string match only, optimised for looking up specific terms verbatim.
 
 ---
 
@@ -128,15 +140,21 @@ Open `~\.copilot\mcp-config.json` and add:
 {
   "mcpServers": {
     "kb-netapp": {
+      "tools": ["*"],
       "command": "python",
       "args": ["C:\\Users\\YOUR_USERNAME\\apps\\kb-mcp\\kb_mcp.py"],
       "env": {
-        "KB_USERNAME": "YOUR_WINDOWS_USERNAME"
+        "KB_USERNAME": "YOUR_WINDOWS_USERNAME",
+        "KB_CA_BUNDLE": "C:\\Users\\YOUR_USERNAME\\.copilot\\ca-bundle.pem",
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONUTF8": "1"
       }
     }
   }
 }
 ```
+
+> `KB_CA_BUNDLE` — path to your corporate CA certificate bundle. Required on NetApp-managed machines to avoid `CERTIFICATE_VERIFY_FAILED` during model download.
 
 Run `/restart` in Copilot CLI. Verify with `/tools` — you should see the `kb-netapp` tools listed.
 
