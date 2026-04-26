@@ -1,14 +1,14 @@
 """
-KB NetApp HTTP Client v2 — Production-Grade
-============================================
-Enhancements over v1:
+KB NetApp HTTP Client
+=====================
+Features:
   1. Header-aware semantic chunking with 15% context overlap
   2. Hybrid search: BM25 keyword scoring + sentence-transformer cosine similarity
   3. Persistent local article index (embeddings cached in ~/.copilot/kb_index/)
   4. Metadata filtering by domain, team, and valid_after date
   5. Auto-indexing: articles fetched via get_article() are chunked and indexed
 
-Category paths now carry (path, domain, team) tuples for metadata-aware filtering.
+Category paths carry (path, domain, team) tuples for metadata-aware filtering.
 """
 
 import hashlib
@@ -29,7 +29,7 @@ from bs4 import BeautifulSoup
 
 from auth_manager import get_stored_cookies, get_username
 
-logger = logging.getLogger("kb-mcp-v2")
+logger = logging.getLogger("kb-mcp")
 
 # ---------------------------------------------------------------------------
 # Constants

@@ -1,7 +1,9 @@
-# KB NetApp MCP Server — Python Dependencies
-# Install with: pip install -r requirements.txt
-# NOTE: No "playwright install" step needed — the server uses your system's
-#       Microsoft Edge browser, which must already be installed on Windows.
+# KB NetApp MCP Server v2 — Additional Python Dependencies
+# Install with: pip install -r requirements_v2.txt
+# NOTE: This supplements requirements.txt — install both, or install this file
+#       which re-declares all v1 dependencies for convenience.
+
+# ── v1 dependencies (unchanged) ──────────────────────────────────────────────
 
 # MCP Server framework
 mcp>=1.0.0
@@ -17,3 +19,21 @@ playwright>=1.44.0
 
 # Secure cookie storage (Windows Credential Manager with DPAPI file fallback)
 keyring>=25.0.0
+
+# ── v2 additions ──────────────────────────────────────────────────────────────
+
+# Sentence-level embeddings for semantic vector search
+# Downloads all-MiniLM-L6-v2 (~90 MB) on first use — requires internet access.
+#
+# Corporate SSL note: if you see "CERTIFICATE_VERIFY_FAILED" on first run,
+# set KB_CA_BUNDLE in mcp-config.json env to your corporate CA bundle path:
+#   "env": { "KB_CA_BUNDLE": "C:\\path\\to\\corporate-ca.pem" }
+# The server gracefully falls back to BM25-only if the model cannot be loaded.
+sentence-transformers>=2.7.0
+
+# Required by sentence-transformers (usually auto-installed, listed explicitly)
+numpy>=1.24.0
+
+# BM25 Okapi keyword scoring
+# Falls back to simple term-frequency overlap if not installed (graceful degradation)
+rank-bm25>=0.2.2

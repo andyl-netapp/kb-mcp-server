@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 """
-KB NetApp MCP Server v2 — Production-Grade
-==========================================
-New features over kb_mcp.py (v1):
+KB NetApp MCP Server
+====================
+Exposes kb.netapp.com as AI tools for GitHub Copilot CLI.
+
+Features:
   - kb_semantic_search : hybrid BM25 + sentence-transformer vector search
   - kb_keyword_lookup  : exact-match search for error codes / internal terms
   - Metadata filtering : domain, team, valid_after for both search tools
   - Auto-indexing      : kb_get_article chunks and embeds fetched articles
   - Strict guardrail   : all search responses carry a no-hallucination prompt
 
-Authentication is shared with v1 (same auth_manager / cookie store).
-
 PORTABLE: All configuration is via environment variables:
   KB_USERNAME : Your NetApp email/username (default: current system user)
 
 Setup:
-  1. pip install -r requirements_v2.txt
-  2. .\\Set-KBCookies.ps1         ← shared with v1, only needed once
+  1. pip install -r requirements.txt
+  2. .\\Set-KBCookies.ps1
   3. Add to your mcp-config.json:
-       "kb-netapp-v2": {
+       "kb-netapp": {
          "command": "python",
-         "args": ["C:\\\\...\\\\kb_mcp_v2.py"],
+         "args": ["C:\\\\...\\\\kb_mcp.py"],
          "env": { "KB_USERNAME": "your_username" }
        }
   4. /restart in Copilot
@@ -37,11 +37,11 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
 import auth_manager
-import kb_client_v2 as kbc
+import kb_client as kbc
 import login_helper
 
 logging.basicConfig(level=logging.WARNING)
-logger = logging.getLogger("kb-mcp-v2")
+logger = logging.getLogger("kb-mcp")
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ def _warmup() -> None:
 # Fire and forget — runs in parallel with MCP server startup
 threading.Thread(target=_warmup, daemon=True, name="kb-warmup").start()
 
-server = Server("kb-netapp-mcp-v2")
+server = Server("kb-netapp-mcp")
 
 
 # ---------------------------------------------------------------------------
