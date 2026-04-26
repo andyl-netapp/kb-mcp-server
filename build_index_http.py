@@ -22,7 +22,7 @@ if os.path.exists(_ca):
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from kb_client_v2 import (
+from kb_client import (
     _browse_categories,
     _build_session,
     _index_article,

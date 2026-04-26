@@ -279,9 +279,9 @@ The server maintains a local vector index at `~\.copilot\kb_index\article_index.
 
 ### Current index status
 
-> The index currently contains **~747 chunks from ~694 Performance KB articles**. `kb_semantic_search` with `team: "Performance"` works fully out of the box.
+> The index currently contains **1,285 chunks from 1,092 Performance KB articles** (fully indexed). `kb_semantic_search` with `team: "Performance"` works fully out of the box.
 >
-> All other KB teams (NAS, OS, SnapMirror, FlexGroup, etc.) are not yet pre-indexed. Run `build_index_http.py` to add them.
+> FlexGroup has 9 articles indexed. All other KB teams (NAS, OS, SnapMirror, etc.) are not yet pre-indexed. Run `build_index_http.py` to add them.
 
 ### Pre-building the index for other KB areas
 
@@ -310,7 +310,7 @@ python build_index_http.py --teams NAS --force
 
 | KB Area | `--teams` value | Status |
 |---------|----------------|--------|
-| Performance | `Performance` | ✅ Pre-indexed (~694 articles) |
+| Performance | `Performance` | ✅ Pre-indexed (1,092 articles) |
 | Operating System | `OS` | Not yet indexed |
 | Upgrade | `Upgrade` | Not yet indexed |
 | MetroCluster | `MetroCluster` | Not yet indexed |
@@ -323,7 +323,7 @@ python build_index_http.py --teams NAS --force
 | SnapLock | `SnapLock` | Not yet indexed |
 | SnapRestore | `SnapRestore` | Not yet indexed |
 | NDMP | `NDMP` | Not yet indexed |
-| FlexGroup | `FlexGroup` | Not yet indexed |
+| FlexGroup | `FlexGroup` | ✅ Partially indexed (9 articles) |
 | Encryption | `Encryption` | Not yet indexed |
 | Efficiency | `Efficiency` | Not yet indexed |
 | FabricPool | `FabricPool` | Not yet indexed |
