@@ -8,6 +8,34 @@ Exposes [kb.netapp.com](https://kb.netapp.com) as AI tools for GitHub Copilot CL
 
 ---
 
+## Sharing with colleagues
+
+Two sides — **both** are required.
+
+### Andy's part (one action)
+
+1. Go to https://github.com/andyl-netapp/kb-mcp-server
+2. Click **Settings** → **Collaborators** → **Add people**
+3. Enter the colleague's **GitHub username or email** → click **Add**
+4. Done — they'll get an email invitation; they must accept it before they can clone
+
+> That's all you need to do. Point them to this README for the rest.
+
+### Colleague's part (four steps)
+
+After accepting the email invite:
+
+| Step | What to do |
+|------|-----------|
+| 1 — Clone | `git clone https://github.com/andyl-netapp/kb-mcp-server.git C:\Users\YOUR_USERNAME\apps\kb-mcp` |
+| 2 — Install | `pip install -r requirements.txt` |
+| 3 — Log in | Run `python login_helper.py` — browser opens, complete NetApp SSO, window closes automatically |
+| 4 — Configure | Add the `kb-netapp` block to `~\.copilot\mcp-config.json`, then run `/restart` in Copilot CLI |
+
+Full instructions for each step are in the **[Setup](#setup)** section below.
+
+---
+
 ## Files
 
 | File | Description |
@@ -43,7 +71,7 @@ Two complementary search modes:
 
 ### Step 1 — Get the code
 
-Clone this repo (requires collaborator access — ask Andy to invite you):
+Clone this repo (requires collaborator access — ask Andy to invite you, see [Sharing with colleagues](#sharing-with-colleagues)):
 
 ```powershell
 git clone https://github.com/andyl-netapp/kb-mcp-server.git C:\Users\YOUR_USERNAME\apps\kb-mcp
@@ -55,12 +83,6 @@ To get future updates:
 ```powershell
 git pull
 ```
-
-**Andy: how to invite a collaborator**
-1. Go to https://github.com/andyl-netapp/kb-mcp-server
-2. Click **Settings** → **Collaborators** → **Add people**
-3. Enter the colleague's GitHub username or email → **Add**
-4. They accept the email invitation
 
 ### Step 2 — Install dependencies
 
