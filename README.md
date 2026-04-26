@@ -108,11 +108,19 @@ git pull
 
 ### Step 2 — Install dependencies
 
-```powershell
-pip install -r requirements.txt
-```
+1. Press **Win + R**, type `powershell`, press Enter — a blue PowerShell window opens
+2. Navigate to the folder where you put the files:
+   ```powershell
+   cd C:\Users\YOUR_USERNAME\apps\kb-mcp
+   ```
+   _(replace `YOUR_USERNAME` with your actual Windows username, e.g. `jsmith`)_
+3. Run:
+   ```powershell
+   pip install -r requirements.txt
+   ```
+   You'll see a lot of packages being downloaded — wait until you get the command prompt back.
 
-> **First-run note:** On first use of `kb_semantic_search`, the server downloads two AI models automatically:
+> **First-run note:** On first use of `kb_semantic_search`, the server also downloads two AI models automatically:
 > - `all-MiniLM-L6-v2` — embedding model (~90 MB)
 > - `ms-marco-MiniLM-L-6-v2` — reranking cross-encoder (~85 MB)
 >
@@ -122,19 +130,24 @@ pip install -r requirements.txt
 
 ### Step 3 — Log in to kb.netapp.com
 
+In the **same PowerShell window** (still in the `kb-mcp` folder), run:
+
 ```powershell
-cd C:\Users\YOUR_USERNAME\apps\kb-mcp
 python login_helper.py
 ```
 
-A browser window opens — complete the NetApp SSO login. The window closes automatically once verified.
+A Microsoft Edge browser window opens automatically — complete the NetApp SSO login as you normally would. The window closes on its own once login is verified. You should see `Cookies saved successfully` printed back in PowerShell.
 
-> **Session expiry:** Cookies last ~8 hours. Re-run `python login_helper.py` when they expire.  
-> ⚠️ Do **not** use the `kb_refresh_login` MCP tool — it will time out (MCP limit 30 s, login takes up to 5 min).
+> **Session expiry:** Cookies last ~8 hours. When they expire, open PowerShell, `cd` to the `kb-mcp` folder, and run `python login_helper.py` again.  
+> ⚠️ Do **not** use the `kb_refresh_login` tool inside Copilot — it will time out (MCP limit 30 s, login takes up to 5 min).
 
 ### Step 4 — Add to Copilot CLI MCP config
 
-Open `~\.copilot\mcp-config.json` and add:
+This tells Copilot CLI where to find the KB server.
+
+1. Open **File Explorer** and navigate to `C:\Users\YOUR_USERNAME\.copilot\`
+2. Open `mcp-config.json` with any text editor (right-click → Open with → Notepad)
+3. The file contains a `"mcpServers": { ... }` block. Add the `kb-netapp` entry **inside** that block:
 
 ```json
 {
@@ -154,9 +167,12 @@ Open `~\.copilot\mcp-config.json` and add:
 }
 ```
 
-> `KB_CA_BUNDLE` — path to your corporate CA certificate bundle. Required on NetApp-managed machines to avoid `CERTIFICATE_VERIFY_FAILED` during model download.
+> Replace every `YOUR_USERNAME` with your actual Windows username (same as your `C:\Users\` folder name).  
+> `KB_CA_BUNDLE` points to your corporate CA certificate — required on NetApp-managed machines.
 
-Run `/restart` in Copilot CLI. Verify with `/tools` — you should see the `kb-netapp` tools listed.
+4. Save the file
+5. Open Copilot CLI and type `/restart`
+6. Type `/tools` — you should see `kb-netapp` tools in the list
 
 ---
 
