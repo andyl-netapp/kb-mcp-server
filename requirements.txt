@@ -1,0 +1,19 @@
+# KB NetApp MCP Server — Python Dependencies
+# Install with: pip install -r requirements.txt
+# NOTE: No "playwright install" step needed — the server uses your system's
+#       Microsoft Edge browser, which must already be installed on Windows.
+
+# MCP Server framework
+mcp>=1.0.0
+
+# HTTP requests (authenticated KB fetching)
+requests>=2.31.0
+
+# HTML parsing (article and search result extraction)
+beautifulsoup4>=4.12.0
+
+# Browser automation for SSO login cookie capture (uses system Edge)
+playwright>=1.44.0
+
+# Secure cookie storage (Windows Credential Manager with DPAPI file fallback)
+keyring>=25.0.0
