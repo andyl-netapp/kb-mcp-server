@@ -10,27 +10,37 @@ Exposes [kb.netapp.com](https://kb.netapp.com) as AI tools for GitHub Copilot CL
 
 ## Sharing with colleagues
 
-Two sides — **both** are required.
+Two sides — **both** are required. There are two ways to share the files — pick whichever works.
 
-### Andy's part (one action)
+### Andy's part — choose one option
 
-1. Go to https://github.com/andyl-netapp/kb-mcp-server
-2. Click **Settings** → **Collaborators** → **Add people**
-3. Enter the colleague's **GitHub username or email** → click **Add**
-4. Done — they'll get an email invitation; they must accept it before they can clone
+**Option A — GitHub invite** _(preferred: colleague gets future updates via `git pull`)_
 
-> That's all you need to do. Point them to this README for the rest.
+1. Open https://github.com/andyl-netapp/kb-mcp-server
+2. Click the **Settings** tab on the repo page (not the account Settings in the top-right corner)
+3. In the left sidebar under **Access**, click **Collaborators** → **Add people**
+4. Enter the colleague's GitHub username or email → **Add**
+5. They'll get an email invite — they must accept it before they can clone
 
-### Colleague's part (four steps)
+> Requires the colleague to have a GitHub account.
 
-After accepting the email invite:
+**Option B — Manual ZIP** _(fallback: no GitHub account needed)_
 
-| Step | What to do |
-|------|-----------|
-| 1 — Clone | `git clone https://github.com/andyl-netapp/kb-mcp-server.git C:\Users\YOUR_USERNAME\apps\kb-mcp` |
-| 2 — Install | `pip install -r requirements.txt` |
-| 3 — Log in | Run `python login_helper.py` — browser opens, complete NetApp SSO, window closes automatically |
-| 4 — Configure | Add the `kb-netapp` block to `~\.copilot\mcp-config.json`, then run `/restart` in Copilot CLI |
+1. Open https://github.com/andyl-netapp/kb-mcp-server
+2. Click the green **Code** button → **Download ZIP**
+3. Send the ZIP to the colleague via Teams / email / OneDrive
+4. They extract it to their preferred folder (e.g. `C:\Users\THEIR_USERNAME\apps\kb-mcp\`)
+
+> ⚠️ No automatic updates — when you push a fix, send them a new ZIP manually.
+
+### Colleague's part (three or four steps)
+
+| Step | Option A (GitHub) | Option B (ZIP) |
+|------|-------------------|----------------|
+| 1 — Get files | Accept invite, then `git clone https://github.com/andyl-netapp/kb-mcp-server.git C:\Users\YOUR_USERNAME\apps\kb-mcp` | Extract ZIP to chosen folder |
+| 2 — Install | `pip install -r requirements.txt` | same |
+| 3 — Log in | `python login_helper.py` — browser opens, complete NetApp SSO | same |
+| 4 — Configure | Add `kb-netapp` block to `~\.copilot\mcp-config.json`, then `/restart` in Copilot CLI | same |
 
 Full instructions for each step are in the **[Setup](#setup)** section below.
 
