@@ -10,11 +10,11 @@ Exposes [kb.netapp.com](https://kb.netapp.com) as AI tools for GitHub Copilot CL
 
 ## Sharing with colleagues
 
-Two sides — **both** are required. There are two ways to share the files — pick whichever works.
+Two sides — **both** are required.
 
 ### Andy's part — choose one option
 
-**Option A — GitHub invite** _(preferred: colleague gets future updates via `git pull`)_
+**Option A — GitHub invite** _(preferred: colleague gets `git pull` updates automatically)_
 
 1. Open https://github.com/andyl-netapp/kb-mcp-server
 2. Click the **Settings** tab on the repo page (not the account Settings in the top-right corner)
@@ -29,20 +29,12 @@ Two sides — **both** are required. There are two ways to share the files — p
 1. Open https://github.com/andyl-netapp/kb-mcp-server
 2. Click the green **Code** button → **Download ZIP**
 3. Send the ZIP to the colleague via Teams / email / OneDrive
-4. They extract it to their preferred folder (e.g. `C:\Users\THEIR_USERNAME\apps\kb-mcp\`)
 
 > ⚠️ No automatic updates — when you push a fix, send them a new ZIP manually.
 
-### Colleague's part (three or four steps)
+### Colleague's part
 
-| Step | Option A (GitHub) | Option B (ZIP) |
-|------|-------------------|----------------|
-| 1 — Get files | Accept invite, then `git clone https://github.com/andyl-netapp/kb-mcp-server.git C:\Users\YOUR_USERNAME\apps\kb-mcp` | Extract ZIP to chosen folder |
-| 2 — Install | `pip install -r requirements.txt` | same |
-| 3 — Log in | `python login_helper.py` — browser opens, complete NetApp SSO | same |
-| 4 — Configure | Add `kb-netapp` block to `~\.copilot\mcp-config.json`, then `/restart` in Copilot CLI | same |
-
-Full instructions for each step are in the **[Setup](#setup)** section below.
+Point them to the **Setup** section below and tell them which option they're using (A or B).
 
 ---
 
@@ -104,76 +96,71 @@ Two complementary search tools:
 | Stage | Method | What it does |
 |-------|--------|-------------|
 | 1 | **BM25** | Fast sparse keyword retrieval — scores chunks by term frequency. Good at catching exact technical words even when semantic meaning is ambiguous. |
-| 2 | **Semantic similarity** | Encodes your query and each candidate chunk into 384-dimensional vectors using `all-MiniLM-L6-v2`*, then scores by cosine similarity. Catches meaning even when the exact words differ. |
-| 3 | **Cross-encoder reranking** | Takes the top candidates from stages 1+2 and re-scores them by running the query and chunk *together* through `ms-marco-MiniLM-L-6-v2`*. More accurate than vector similarity alone because it considers full query–chunk interaction. |
+| 2 | **Semantic similarity** | Encodes your query and each candidate chunk into 384-dimensional vectors using `all-MiniLM-L6-v2`, then scores by cosine similarity. Catches meaning even when the exact words differ. |
+| 3 | **Cross-encoder reranking** | Takes the top candidates from stages 1+2 and re-scores them by running the query and chunk *together* through `ms-marco-MiniLM-L-6-v2`. More accurate than vector similarity alone because it considers full query–chunk interaction. |
 
 Stages 1+2 run in parallel over the full index (fast). Stage 3 only runs on the top ~50 candidates (slower but more precise). Final results are ordered by rerank score.
 
 `kb_keyword_lookup` skips stages 2 and 3 — it does BM25 + exact string match only, optimised for looking up specific terms verbatim.
 
-> *`all-MiniLM-L6-v2` and `ms-marco-MiniLM-L-6-v2` are published model names on [HuggingFace Hub](https://huggingface.co). The "v2" is part of the model's own name chosen by its creators — it is **not** a version number for this tool. These names cannot be changed; they are looked up by the Python library to download and cache the correct model files.
-
 ---
 
 ## Setup
 
-### Step 1 — Get the code
+Choose your path based on how Andy shared the files with you.
 
-Clone this repo (requires collaborator access — ask Andy to invite you, see [Sharing with colleagues](#sharing-with-colleagues)):
+---
+
+### Option A — GitHub (clone)
+
+#### A-1. Accept the invite and clone
+
+Check your email for a GitHub invitation from `andyl-netapp`. Accept it, then open PowerShell:
 
 ```powershell
 git clone https://github.com/andyl-netapp/kb-mcp-server.git C:\Users\YOUR_USERNAME\apps\kb-mcp
-cd C:\Users\YOUR_USERNAME\apps\kb-mcp
 ```
 
-To get future updates:
+_(replace `YOUR_USERNAME` with your actual Windows username, e.g. `jsmith`)_
+
+To get future updates any time Andy pushes a fix:
 
 ```powershell
+cd C:\Users\YOUR_USERNAME\apps\kb-mcp
 git pull
 ```
 
-### Step 2 — Install dependencies
+#### A-2. Install dependencies
 
-1. Press **Win + R**, type `powershell`, press Enter — a blue PowerShell window opens
-2. Navigate to the folder where you put the files:
-   ```powershell
-   cd C:\Users\YOUR_USERNAME\apps\kb-mcp
-   ```
-   _(replace `YOUR_USERNAME` with your actual Windows username, e.g. `jsmith`)_
-3. Run:
-   ```powershell
-   pip install -r requirements.txt
-   ```
-   You'll see a lot of packages being downloaded — wait until you get the command prompt back.
+In the **same PowerShell window**, run:
 
-> **First-run note:** On first use of `kb_semantic_search`, the server also downloads two AI models automatically:
-> - `all-MiniLM-L6-v2` — embedding model (~90 MB)
-> - `ms-marco-MiniLM-L-6-v2` — reranking cross-encoder (~85 MB)
->
-> Both are cached after first download. Cold start is ~11 seconds.
+```powershell
+cd C:\Users\YOUR_USERNAME\apps\kb-mcp
+pip install -r requirements.txt
+```
 
-> **Corporate SSL:** If you see `CERTIFICATE_VERIFY_FAILED`, add `KB_CA_BUNDLE` to your MCP config env pointing to your corporate CA bundle path.
+You'll see many packages downloading — wait until the command prompt comes back.
 
-### Step 3 — Log in to kb.netapp.com
+> On first use of `kb_semantic_search`, two AI models (~175 MB total) are also downloaded and cached automatically. Cold start is ~11 seconds.
 
-In the **same PowerShell window** (still in the `kb-mcp` folder), run:
+#### A-3. Log in to kb.netapp.com
+
+In the **same PowerShell window**, run:
 
 ```powershell
 python login_helper.py
 ```
 
-A Microsoft Edge browser window opens automatically — complete the NetApp SSO login as you normally would. The window closes on its own once login is verified. You should see `Cookies saved successfully` printed back in PowerShell.
+A Microsoft Edge browser opens — complete the NetApp SSO login as normal. The window closes automatically. PowerShell prints `Cookies saved successfully`.
 
-> **Session expiry:** Cookies last ~8 hours. When they expire, open PowerShell, `cd` to the `kb-mcp` folder, and run `python login_helper.py` again.  
-> ⚠️ Do **not** use the `kb_refresh_login` tool inside Copilot — it will time out (MCP limit 30 s, login takes up to 5 min).
+> Cookies last ~8 hours. When they expire, open PowerShell, `cd` to the `kb-mcp` folder, and run `python login_helper.py` again.  
+> ⚠️ Do **not** use `kb_refresh_login` inside Copilot — it times out (MCP limit 30 s, login takes up to 5 min).
 
-### Step 4 — Add to Copilot CLI MCP config
+#### A-4. Add to Copilot CLI MCP config
 
-This tells Copilot CLI where to find the KB server.
-
-1. Open **File Explorer** and navigate to `C:\Users\YOUR_USERNAME\.copilot\`
-2. Open `mcp-config.json` with any text editor (right-click → Open with → Notepad)
-3. The file contains a `"mcpServers": { ... }` block. Add the `kb-netapp` entry **inside** that block:
+1. Open **File Explorer** → navigate to `C:\Users\YOUR_USERNAME\.copilot\`
+2. Right-click `mcp-config.json` → **Open with** → **Notepad**
+3. Add the `kb-netapp` block inside the `"mcpServers": { }` section:
 
 ```json
 {
@@ -193,12 +180,83 @@ This tells Copilot CLI where to find the KB server.
 }
 ```
 
-> Replace every `YOUR_USERNAME` with your actual Windows username (same as your `C:\Users\` folder name).  
-> `KB_CA_BUNDLE` points to your corporate CA certificate — required on NetApp-managed machines.
+> Replace every `YOUR_USERNAME` with your Windows username.  
+> `KB_CA_BUNDLE` is required on NetApp-managed machines (prevents `CERTIFICATE_VERIFY_FAILED`).
 
 4. Save the file
-5. Open Copilot CLI and type `/restart`
-6. Type `/tools` — you should see `kb-netapp` tools in the list
+5. In Copilot CLI, type `/restart`
+6. Type `/tools` — you should see `kb-netapp` tools listed ✅
+
+---
+
+### Option B — ZIP (no GitHub account needed)
+
+#### B-1. Extract the ZIP
+
+Extract the ZIP Andy sent you to a folder, for example:
+
+```
+C:\Users\YOUR_USERNAME\apps\kb-mcp\
+```
+
+#### B-2. Install dependencies
+
+Press **Win + R**, type `powershell`, press Enter. Then run:
+
+```powershell
+cd C:\Users\YOUR_USERNAME\apps\kb-mcp
+pip install -r requirements.txt
+```
+
+_(replace `YOUR_USERNAME` with your actual Windows username)_
+
+You'll see many packages downloading — wait until the command prompt comes back.
+
+> On first use of `kb_semantic_search`, two AI models (~175 MB total) are also downloaded and cached automatically. Cold start is ~11 seconds.
+
+#### B-3. Log in to kb.netapp.com
+
+In the **same PowerShell window**, run:
+
+```powershell
+python login_helper.py
+```
+
+A Microsoft Edge browser opens — complete the NetApp SSO login as normal. The window closes automatically. PowerShell prints `Cookies saved successfully`.
+
+> Cookies last ~8 hours. When they expire, open PowerShell, `cd` to the `kb-mcp` folder, and run `python login_helper.py` again.  
+> ⚠️ Do **not** use `kb_refresh_login` inside Copilot — it times out (MCP limit 30 s, login takes up to 5 min).
+
+#### B-4. Add to Copilot CLI MCP config
+
+1. Open **File Explorer** → navigate to `C:\Users\YOUR_USERNAME\.copilot\`
+2. Right-click `mcp-config.json` → **Open with** → **Notepad**
+3. Add the `kb-netapp` block inside the `"mcpServers": { }` section:
+
+```json
+{
+  "mcpServers": {
+    "kb-netapp": {
+      "tools": ["*"],
+      "command": "python",
+      "args": ["C:\\Users\\YOUR_USERNAME\\apps\\kb-mcp\\kb_mcp.py"],
+      "env": {
+        "KB_USERNAME": "YOUR_WINDOWS_USERNAME",
+        "KB_CA_BUNDLE": "C:\\Users\\YOUR_USERNAME\\.copilot\\ca-bundle.pem",
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONUTF8": "1"
+      }
+    }
+  }
+}
+```
+
+> Replace every `YOUR_USERNAME` with your Windows username.  
+> `KB_CA_BUNDLE` is required on NetApp-managed machines (prevents `CERTIFICATE_VERIFY_FAILED`).
+
+4. Save the file
+5. In Copilot CLI, type `/restart`
+6. Type `/tools` — you should see `kb-netapp` tools listed ✅
 
 ---
 
