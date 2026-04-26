@@ -70,22 +70,48 @@ Once set up, you can ask Copilot CLI questions like:
 - *"Look up articles mentioning WAFL_CP_LIMIT"*
 - *"What does KB article https://kb.netapp.com/... say about this error?"*
 
+### This is a RAG system
+
+This tool implements **RAG (Retrieval-Augmented Generation)** — a two-part pattern:
+
+```
+Your question
+     │
+     ▼
+┌─────────────────────────────────┐
+│  RETRIEVAL  (this tool)         │
+│  BM25 + Semantic + Reranking    │
+│  → top KB text chunks           │
+└─────────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────────┐
+│  GENERATION  (Copilot CLI LLM)  │
+│  Claude / GPT reads the chunks  │
+│  → generates a grounded answer  │
+└─────────────────────────────────┘
+```
+
+Without RAG, the LLM answers from its training data alone — which may be outdated or missing NetApp-specific details. With RAG, every answer is grounded in real, current KB articles fetched from kb.netapp.com.
+
 Two complementary search tools:
 
 - **`kb_semantic_search`** — best for conceptual questions and natural-language troubleshooting descriptions.
 - **`kb_keyword_lookup`** — best for exact technical terms: error codes, EMS event names, ONTAP command names, log fragments (e.g. `ENOSPC`, `wafliron`, `snapmirror break`).
 
-### How `kb_semantic_search` works — three-stage pipeline
+### How `kb_semantic_search` works — three-stage retrieval pipeline
 
 | Stage | Method | What it does |
 |-------|--------|-------------|
 | 1 | **BM25** | Fast sparse keyword retrieval — scores chunks by term frequency. Good at catching exact technical words even when semantic meaning is ambiguous. |
-| 2 | **Semantic similarity** | Encodes your query and each candidate chunk into 384-dimensional vectors using `all-MiniLM-L6-v2`, then scores by cosine similarity. Catches meaning even when the exact words differ. |
-| 3 | **Cross-encoder reranking** | Takes the top candidates from stages 1+2 and re-scores them by running the query and chunk *together* through `ms-marco-MiniLM-L-6-v2`. More accurate than vector similarity alone because it considers full query–chunk interaction. |
+| 2 | **Semantic similarity** | Encodes your query and each candidate chunk into 384-dimensional vectors using `all-MiniLM-L6-v2`*, then scores by cosine similarity. Catches meaning even when the exact words differ. |
+| 3 | **Cross-encoder reranking** | Takes the top candidates from stages 1+2 and re-scores them by running the query and chunk *together* through `ms-marco-MiniLM-L-6-v2`*. More accurate than vector similarity alone because it considers full query–chunk interaction. |
 
 Stages 1+2 run in parallel over the full index (fast). Stage 3 only runs on the top ~50 candidates (slower but more precise). Final results are ordered by rerank score.
 
 `kb_keyword_lookup` skips stages 2 and 3 — it does BM25 + exact string match only, optimised for looking up specific terms verbatim.
+
+> *`all-MiniLM-L6-v2` and `ms-marco-MiniLM-L-6-v2` are published model names on [HuggingFace Hub](https://huggingface.co). The "v2" is part of the model's own name chosen by its creators — it is **not** a version number for this tool. These names cannot be changed; they are looked up by the Python library to download and cache the correct model files.
 
 ---
 
@@ -200,6 +226,13 @@ The server maintains a local vector index at `~\.copilot\kb_index\article_index.
 > All other KB teams (NAS, OS, SnapMirror, FlexGroup, etc.) are not yet pre-indexed. Run `build_index_http.py` to add them.
 
 ### Pre-building the index for other KB areas
+
+> **Prerequisites before running:**
+> 1. Open PowerShell and `cd` to your `kb-mcp` folder
+> 2. Make sure you are logged in first — run `python login_helper.py` if needed
+> 3. Stay connected to NetApp Corp VPN throughout
+
+> **⚠️ The index is local to your machine.** Each person must build their own. There is no shared index — the `.pkl` file lives at `~\.copilot\kb_index\article_index.pkl` on your own PC.
 
 ```powershell
 # Index NAS articles
