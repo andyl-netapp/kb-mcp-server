@@ -187,6 +187,178 @@ def do_login(username: str = None) -> bool:
     # Script injected into every page to hide automation fingerprint
     _STEALTH_SCRIPT = "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
 
+    def _read_profile_cookies_sqlite(profile_dir: str) -> list:
+        """
+        Read cookies directly from an Edge/Chrome profile's SQLite database.
+        No browser is opened — pure Python using sqlite3, win32crypt, and AES-GCM.
+
+        Returns a list of cookie dicts (Playwright-compatible format) or [] on failure.
+        """
+        import sqlite3, shutil, base64, json, tempfile, time as _time
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        # ── 1. Locate the Cookies database ──────────────────────────────────
+        cookies_db = None
+        for rel in ("Default/Network/Cookies", "Default/Cookies"):
+            candidate = os.path.join(profile_dir, rel.replace("/", os.sep))
+            if os.path.exists(candidate):
+                cookies_db = candidate
+                break
+        if not cookies_db:
+            return []
+
+        # ── 2. Derive the AES decryption key from Local State (DPAPI) ───────
+        aes_key = None
+        local_state_path = os.path.join(profile_dir, "Local State")
+        if os.path.exists(local_state_path):
+            try:
+                with open(local_state_path, "r", encoding="utf-8") as f:
+                    ls = json.load(f)
+                enc_key_b64 = ls.get("os_crypt", {}).get("encrypted_key", "")
+                if enc_key_b64:
+                    # base64-decode then strip the literal "DPAPI" prefix (5 bytes)
+                    enc_key_bytes = base64.b64decode(enc_key_b64)[5:]
+                    from win32crypt import CryptUnprotectData
+                    aes_key = CryptUnprotectData(enc_key_bytes, None, None, None, 0)[1]
+            except Exception as _e:
+                _log(f"[...] Could not read Local State AES key: {_e}")
+
+        # ── 3. Copy DB to a temp file so we can read it while Edge is closed ─
+        tmp_path = None
+        rows = []
+        try:
+            tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+            tmp.close()
+            tmp_path = tmp.name
+            shutil.copy2(cookies_db, tmp_path)
+            conn = sqlite3.connect(tmp_path)
+            rows = conn.execute(
+                "SELECT host_key, name, encrypted_value, path, "
+                "expires_utc, is_secure, is_httponly "
+                "FROM cookies"
+            ).fetchall()
+            conn.close()
+        except Exception as _e:
+            _log(f"[...] SQLite read failed: {_e}")
+            return []
+        finally:
+            if tmp_path:
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
+
+        # ── 4. Decrypt and filter cookies ────────────────────────────────────
+        now_unix = _time.time()
+        cookies = []
+        for host_key, name, enc_val, path, expires_utc, is_secure, is_httponly in rows:
+            # Skip cookies from unrelated domains
+            if "netapp.com" not in host_key:
+                continue
+
+            # Convert Chrome epoch (µs since 1601-01-01) → Unix timestamp
+            # The Windows FILETIME epoch offset is 11 644 473 600 seconds.
+            expires_unix = (expires_utc / 1_000_000 - 11_644_473_600) if expires_utc else 0
+
+            # Skip clearly expired non-session cookies
+            if expires_unix > 0 and expires_unix < now_unix:
+                continue
+
+            # Decrypt the value
+            value = ""
+            try:
+                if isinstance(enc_val, bytes) and enc_val[:3] == b"v10" and aes_key:
+                    # AES-256-GCM: nonce=bytes[3:15], ciphertext=bytes[15:]
+                    nonce = enc_val[3:15]
+                    ciphertext = enc_val[15:]
+                    raw = AESGCM(aes_key).decrypt(nonce, ciphertext, None)
+                    # Edge/Chrome 127+ prepend a 32-byte app-bound entropy prefix
+                    # before the actual cookie value.  Detect and skip it.
+                    if len(raw) > 32:
+                        try:
+                            raw[32:].decode("utf-8")
+                            raw = raw[32:]  # skip the prefix
+                        except UnicodeDecodeError:
+                            pass            # older format — no prefix, use raw as-is
+                    value = raw.decode("utf-8")
+                elif isinstance(enc_val, bytes) and enc_val:
+                    from win32crypt import CryptUnprotectData
+                    value = CryptUnprotectData(enc_val, None, None, None, 0)[1].decode("utf-8")
+            except Exception:
+                continue
+
+            if not value:
+                continue
+
+            cookies.append({
+                "name": name,
+                "value": value,
+                "domain": host_key,          # keep leading dot for domain cookies
+                "path": path or "/",
+                "expires": expires_unix,
+                "httpOnly": bool(is_httponly),
+                "secure": bool(is_secure),
+                "sameSite": "Lax",
+            })
+
+        return cookies
+
+    def _try_silent_browser_refresh(profile_dir: str) -> bool:
+        """
+        Silently verify and restore KB session cookies from the Edge profile's
+        SQLite database — no browser window of any kind is opened.
+
+        Reads cookies directly using sqlite3 + DPAPI decryption, then does an
+        HTTP probe to confirm the session is still valid on the server side.
+        Falls through silently on any error so the caller opens a visible browser.
+        """
+        import requests as _req
+
+        cookies = _read_profile_cookies_sqlite(profile_dir)
+        netapp_cookies = [c for c in cookies if "netapp.com" in c.get("domain", "")]
+
+        if len(netapp_cookies) < 3:
+            _log(
+                f"[...] Profile has {len(netapp_cookies)} netapp cookies "
+                f"— silent check skipped."
+            )
+            return False
+
+        # Build a requests session with the profile cookies and probe gated content
+        try:
+            jar = _req.cookies.RequestsCookieJar()
+            for c in netapp_cookies:
+                jar.set(
+                    c["name"], c["value"],
+                    domain=c.get("domain", "").lstrip("."),
+                    path=c.get("path", "/"),
+                )
+            s = _req.Session()
+            s.cookies = jar
+            s.headers.update({
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+                "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+                "Referer": "https://kb.netapp.com/",
+            })
+            resp = s.get(_GATED_TEST_URL, timeout=10, allow_redirects=True)
+            if "sign in to view the entire content" not in resp.text.lower():
+                set_stored_cookies(netapp_cookies, username)
+                _log(
+                    f"[OK] Silent refresh (SQLite): session valid, "
+                    f"{len(netapp_cookies)} cookies captured — no browser window needed."
+                )
+                return True
+            else:
+                _log("[...] Profile cookies exist but server session expired — browser login needed.")
+                return False
+        except Exception as e:
+            _log(f"[...] Silent check HTTP probe failed: {e}")
+            return False
+
     def _try_launch_persistent(p, profile_dir, channel=None):
         kwargs = dict(
             user_data_dir=profile_dir,
@@ -244,7 +416,17 @@ def do_login(username: str = None) -> bool:
         ctx.add_init_script(_STEALTH_SCRIPT)
         return ctx, proc  # caller must terminate proc on cleanup
 
+    # ── Silent pre-check (no browser) ───────────────────────────────────────
+    # Read profile cookies via SQLite + DPAPI/AES-GCM and probe gated content
+    # with requests.  No browser window of any kind is opened here.
+    _log("[...] Performing silent session check (SQLite cookie read)...")
+    if _try_silent_browser_refresh(browser_session_dir):
+        return True
+    _log("[...] No valid cached session — launching browser.\n")
+    # ────────────────────────────────────────────────────────────────────────
+
     with sync_playwright() as p:
+
         context = None
         _edge_cdp_proc = None
 
@@ -300,8 +482,9 @@ def do_login(username: str = None) -> bool:
         _log("[...] Please click 'Sign In' in the browser and complete NetApp SSO.")
         _log("[...] The window closes automatically once login is verified.\n")
 
-        # How often to probe gated content in a background tab (seconds).
-        # A background tab is used so we NEVER navigate the user's visible page.
+        # How often to probe gated content (seconds).
+        # Uses an HTTP request with the browser's current cookies — completely
+        # invisible to the user (no new tab, no page navigation).
         CHECK_INTERVAL = 20
         start = time.time()
         last_status_print = 0
@@ -317,44 +500,52 @@ def do_login(username: str = None) -> bool:
                 _log(f"   Still waiting... ({remaining}s remaining)")
                 last_status_print = elapsed
 
-            # Silently verify gated access in a hidden background tab
+            # Silently verify gated access via HTTP probe (invisible — no new tab).
+            # Extract the current browser cookies and replay them with requests so
+            # the user's visible page is never navigated or obscured.
             if time.time() - last_check_time >= CHECK_INTERVAL:
                 last_check_time = time.time()
-                verify_page = None
                 try:
-                    verify_page = context.new_page()
-                    verify_page.goto(
-                        _GATED_TEST_URL,
-                        wait_until="domcontentloaded",
-                        timeout=20000,
-                    )
-                    verify_page.wait_for_timeout(2000)
-                    page_text = verify_page.inner_text("body").lower()
-
-                    if "sign in to view the entire content" not in page_text:
-                        # Gated content is accessible — login complete!
-                        all_cookies = context.cookies()
-                        netapp_cookies = [
-                            c for c in all_cookies
-                            if "netapp.com" in c.get("domain", "")
-                        ]
-                        _log(
-                            f"\n[OK] Login verified! Captured {len(netapp_cookies)} "
-                            f"netapp.com cookies (total: {len(all_cookies)})."
-                        )
-                        set_stored_cookies(netapp_cookies, username)
-                        _log(f"[OK] Cookies saved for user: {username}")
-                        logged_in = True
+                    import requests as _req
+                    all_cookies = context.cookies()
+                    netapp_cookies = [
+                        c for c in all_cookies
+                        if "netapp.com" in c.get("domain", "")
+                    ]
+                    if len(netapp_cookies) >= 3:
+                        jar = _req.cookies.RequestsCookieJar()
+                        for c in netapp_cookies:
+                            jar.set(
+                                c["name"], c["value"],
+                                domain=c.get("domain", ".kb.netapp.com"),
+                                path=c.get("path", "/"),
+                            )
+                        s = _req.Session()
+                        s.cookies = jar
+                        s.headers.update({
+                            "User-Agent": (
+                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                "Chrome/124.0.0.0 Safari/537.36"
+                            ),
+                            "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+                            "Referer": "https://kb.netapp.com/",
+                        })
+                        resp = s.get(_GATED_TEST_URL, timeout=10, allow_redirects=True)
+                        if "sign in to view the entire content" not in resp.text.lower():
+                            _log(
+                                f"\n[OK] Login verified! Captured {len(netapp_cookies)} "
+                                f"netapp.com cookies (total: {len(all_cookies)})."
+                            )
+                            set_stored_cookies(netapp_cookies, username)
+                            _log(f"[OK] Cookies saved for user: {username}")
+                            logged_in = True
+                        else:
+                            _log("[...] Not logged in yet — please complete SSO in the browser.")
                     else:
-                        _log("[...] Not logged in yet — please complete SSO in the browser.")
+                        _log("[...] Waiting for SSO cookies...")
                 except Exception as e:
                     _log(f"[...] Check error (will retry): {e}")
-                finally:
-                    if verify_page is not None:
-                        try:
-                            verify_page.close()
-                        except Exception:
-                            pass
 
                 if logged_in:
                     time.sleep(1.5)

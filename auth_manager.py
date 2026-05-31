@@ -88,6 +88,51 @@ def _fallback_delete(username: str) -> bool:
     return False
 
 
+# Gated article used to probe session liveness (same URL as login_helper)
+_GATED_PROBE_URL = (
+    "https://kb.netapp.com/on-prem/ontap/Perf/Perf-KBs/"
+    "High_CIFS_latency_on_FlexGroup_constituents_from_heavy_RENAME_workload"
+)
+
+
+def probe_session_valid(username: str = None) -> bool:
+    """
+    Live HTTP probe: fetch a known gated KB article using the stored cookies.
+    Returns True if the content is accessible (server-side session is still alive).
+
+    This is used as a secondary check when the 8-hour session-cookie fallback
+    in is_cookies_expired() fires — NetApp SSO sessions routinely outlive 8 h,
+    so the timestamp-only check is overly conservative.
+    """
+    try:
+        import requests as _req
+        data = get_stored_cookies(username)
+        cookies_list = data.get("cookies", [])
+        if not cookies_list:
+            return False
+        jar = _req.cookies.RequestsCookieJar()
+        for c in cookies_list:
+            jar.set(
+                c["name"], c["value"],
+                domain=c.get("domain", ".kb.netapp.com"),
+                path=c.get("path", "/"),
+            )
+        s = _req.Session()
+        s.cookies = jar
+        s.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+            "Referer": "https://kb.netapp.com/",
+        })
+        resp = s.get(_GATED_PROBE_URL, timeout=10, allow_redirects=True)
+        return "sign in to view the entire content" not in resp.text.lower()
+    except Exception:
+        return False
+
+
 def get_username() -> str:
     """
     Get username from environment variable or system username.
@@ -187,7 +232,23 @@ def is_cookies_expired(username: str = None) -> bool:
         # All cookies are session-only (no expires field) — fall back to 8h from save time
         saved_at = datetime.fromisoformat(data.get("saved_at", "2000-01-01T00:00:00+00:00"))
         age_hours = (datetime.now(timezone.utc) - saved_at).total_seconds() / 3600
-        return age_hours > 8
+        if age_hours <= 8:
+            return False
+
+        # Beyond the 8 h window — do a live HTTP probe before declaring expired.
+        # NetApp SSO sessions commonly survive well beyond 8 h; the timestamp
+        # fallback is intentionally conservative so we verify before forcing
+        # the user through a browser login.
+        if probe_session_valid(username):
+            # Session is still alive: refresh saved_at so the next call within
+            # ~8 h won't probe the network unnecessarily.
+            try:
+                set_stored_cookies(data.get("cookies", []), username)
+            except Exception:
+                pass
+            return False
+
+        return True
 
     except Exception:
         return True
